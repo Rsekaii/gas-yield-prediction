@@ -1,0 +1,109 @@
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
+import pandas as pd
+
+file_path = r'/Users/junaibi/Library/CloudStorage/GoogleDrive-aljunaibi.rames@gmail.com/My Drive/AI 701 project /For Python/2022 training set_clean_good.xlsx'  
+sheet_name = 'For Python'  
+
+# Load the 2022 file
+data22 = pd.read_excel(file_path, sheet_name=sheet_name)
+# Load the 2023 file
+data23 = pd.read_excel(tfile_path, sheet_name=tsheet_name)
+# Load the 2021 file
+data21 = pd.read_excel(onefile_path, sheet_name=onesheet_name)
+# Load the 2024 file
+data24 = pd.read_excel(ffile_path, sheet_name=fsheet_name)
+
+Selected = ['C1','Sulphur','NGL','Feed O ', 'Feed B', 'Feed S', 'Feed K','Feed I','Feed N']
+data23_s = data23[Selected].copy()
+data22_s = data22[Selected].copy()
+data21_s = data21[Selected].copy()
+data24_s = data24[Selected].copy()
+
+data1 = pd.concat([data22_s, data23_s, data21_s, data24_s], ignore_index=True)
+data_cluster=data1[['C1', 'Sulphur', 'NGL', 'Feed O ', 'Feed B', 'Feed S', 'Feed K','Feed N',
+       'Feed I']]
+
+# Create DataFrame
+df = pd.DataFrame(data_cluster)
+
+# Calculate total feed volume per day
+df['Total Feed'] = df[['Feed O ', 'Feed B', 'Feed S', 'Feed K', 'Feed N', 'Feed I']].sum(axis=1)
+
+# Calculate proportions of each feed
+for feed in ['Feed O ', 'Feed B', 'Feed S', 'Feed K', 'Feed N', 'Feed I']:
+    df[f'{feed}_Prop'] = df[feed] / df['Total Feed']
+
+# Calculate production contributions for each feed
+for feed in ['Feed O ', 'Feed B', 'Feed S', 'Feed K', 'Feed N', 'Feed I']:
+    df[f'{feed}_C1'] = df[f'{feed}_Prop'] * df['C1']
+    df[f'{feed}_Sulphur'] = df[f'{feed}_Prop'] * df['Sulphur']
+    df[f'{feed}_NGL'] = df[f'{feed}_Prop'] * df['NGL']
+
+# Initialize feeds_transposed with feeds as rows
+feeds_transposed = pd.DataFrame(index=['Feed O ', 'Feed B', 'Feed S', 'Feed K', 'Feed N', 'Feed I'])
+# Aggregate contributions for each feed
+for product in ['C1', 'Sulphur', 'NGL']:
+    feeds_transposed[product] = [
+        df[f'{feed}_{product}'].sum() for feed in ['Feed O ', 'Feed B', 'Feed S', 'Feed K', 'Feed N', 'Feed I']
+
+# Aggregate feed volumes
+feeds_transposed['Mean Volume'] = df[['Feed O ', 'Feed B', 'Feed S', 'Feed K', 'Feed N', 'Feed I']].mean(axis=0).values
+feeds_transposed['Std Volume'] = df[['Feed O ', 'Feed B', 'Feed S', 'Feed K', 'Feed N', 'Feed I']].std(axis=0).values
+
+# Handle NaN values
+feeds_transposed.fillna(0, inplace=True)  # Replace NaNs with 0
+print("NaN values after handling:", feeds_transposed.isna().sum())
+
+# Combine features for clustering
+clustering_features = feeds_transposed[['Mean Volume', 'Std Volume', 'C1', 'Sulphur', 'NGL']]
+
+# Normalize features
+scaler = StandardScaler()
+scaled_features = scaler.fit_transform(clustering_features)
+
+# Elbow Method to determine the optimal number of clusters
+inertias = []
+cluster_range = range(1, 6)  # Test 1 to 10 clusters
+
+for k in cluster_range:
+    kmeans = KMeans(n_clusters=k, random_state=42)
+    kmeans.fit(scaled_features)
+    inertias.append(kmeans.inertia_)
+
+# Plot the Elbow Method
+plt.figure(figsize=(10, 6))
+plt.plot(cluster_range, inertias, marker='o')
+plt.xlabel('Number of Clusters', fontsize=12)
+plt.ylabel('Inertia', fontsize=12)
+plt.title('Elbow Method for Optimal Number of Clusters', fontsize=14)
+plt.grid(alpha=0.3)
+plt.show()
+
+
+
+#choosing K=3
+
+# Perform clustering
+kmeans = KMeans(n_clusters=3, random_state=42)
+feeds_transposed['Cluster'] = kmeans.fit_predict(scaled_features)
+
+# Debug: Check final clustered DataFrame
+print("Final Clustered Feeds Transposed:\n", feeds_transposed)
+
+# Plot the clusters
+plt.figure(figsize=(10, 6))
+plt.scatter(
+    feeds_transposed['C1'],
+    feeds_transposed['NGL'],
+    c=feeds_transposed['Cluster'],
+    cmap='viridis',
+    s=100
+)
+plt.xlabel('C1 Contribution', fontsize=12)
+plt.ylabel('NGL Contribution', fontsize=12)
+plt.title('Clustering Feeds Based on Production Contributions', fontsize=14)
+plt.colorbar(label='Cluster')
+plt.grid(alpha=0.3)
+plt.show()
+
